@@ -1,0 +1,7 @@
+/target
+/ROMs
+.DS_Store
+*.log
+*.pdf
+*.gb
+
