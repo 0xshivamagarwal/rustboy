@@ -1,5 +1,8 @@
 use crate::{HEIGHT, WIDTH, mmu::MMU, utils::is_bit_set};
-use std::collections::VecDeque;
+use std::{
+	collections::VecDeque,
+	ops::{BitAnd, Shl, Shr},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Modes {
@@ -51,8 +54,6 @@ pub struct PPU {
 	cycles_waste: u16,
 	cycles_spent: u16,
 	mode: Modes,
-	wy: u8,
-	wx: u8,
 	ly: u8,
 	lx: u8,
 	w_present: bool,
@@ -71,7 +72,6 @@ impl PPU {
 	const SCX: u16 = 0xFF43;
 	const LY: u16 = 0xFF44;
 	const LYC: u16 = 0xFF45;
-	// const DMA: u16 = 0xFF46;
 	const BGP: u16 = 0xFF47;
 	const OBP0: u16 = 0xFF48;
 	const OBP1: u16 = 0xFF49;
@@ -114,8 +114,6 @@ impl PPU {
 			cycles_waste: 0,
 			cycles_spent: 0,
 			mode: Modes::from(mmu.read_byte(Self::STAT) & 0x03),
-			wy: mmu.read_byte(Self::WY),
-			wx: mmu.read_byte(Self::WX),
 			ly: mmu.read_byte(Self::LY),
 			lx: 0,
 			w_present: false,
@@ -276,35 +274,39 @@ impl PPU {
 	fn fill_background_fifo(&mut self, mmu: &MMU) {
 		let scy = mmu.read_byte(Self::SCY);
 		let scx = mmu.read_byte(Self::SCX);
+		let wy = mmu.read_byte(Self::WY);
+		let wx = mmu.read_byte(Self::WX);
 		let lcdc = mmu.read_byte(Self::LCDC);
 		let bg_enable = is_bit_set(lcdc, 0);
-		let is_window = is_bit_set(lcdc, 5) && self.ly >= self.wy && self.lx + 7 >= self.wx;
-		let tile_map_address = match match is_window {
-			true => is_bit_set(lcdc, 6),
-			false => is_bit_set(lcdc, 3),
-		} {
-			true => 0x9C00,
-			false => 0x9800,
+		let is_window = is_bit_set(lcdc, 5) && self.ly >= wy && self.lx + 7 >= wx;
+
+		let (tile_map_area, tile_index_offset, tile_line_offset) = match is_window {
+			true => (
+				is_bit_set(lcdc, 6),
+				(self.w_ly.shr(3) as u16).shl(5) + self.lx.wrapping_add(7).wrapping_sub(wx).shr(3) as u16,
+				self.w_ly.bitand(0x07).shl(1) as u16,
+			),
+			false => (
+				is_bit_set(lcdc, 3),
+				(scy.wrapping_add(self.ly).shr(3) as u16).shl(5) + scx.wrapping_add(self.lx).shr(3) as u16,
+				scy.wrapping_add(self.ly).bitand(0x07).shl(1) as u16,
+			),
 		};
-		let tile_y = match is_window {
-			true => self.w_ly,
-			false => scy.wrapping_add(self.ly),
-		} / 8;
-		let tile_x = match is_window {
-			true => (self.lx + 7).wrapping_sub(self.wx),
-			false => scx.wrapping_add(self.lx),
-		} / 8;
-		let tile_no = mmu.read_byte(tile_map_address + (32 * tile_y as u16) + tile_x as u16);
-		let tile_address = match is_bit_set(lcdc, 4) {
-			true => 0x8000 + (16 * (tile_no as u16)),
-			false => 0x9000u16.wrapping_add_signed(16 * (tile_no as i8) as i16),
-		} + (2
-			* (match is_window {
-				true => self.w_ly,
-				false => scy.wrapping_add(self.ly),
-			} % 8) as u16);
-		let lb = mmu.read_byte(tile_address);
-		let hb = mmu.read_byte(tile_address + 1);
+
+		let tile_index_address = tile_index_offset as u16
+			+ match tile_map_area {
+				true => 0x9C00,
+				false => 0x9800,
+			};
+		let tile_index = mmu.read_byte(tile_index_address);
+
+		let tile_line_address = tile_line_offset
+			+ match is_bit_set(lcdc, 4) {
+				true => 0x8000 + (16 * (tile_index as u16)),
+				false => 0x9000u16.wrapping_add_signed(16 * (tile_index as i8) as i16),
+			};
+		let lb = mmu.read_byte(tile_line_address);
+		let hb = mmu.read_byte(tile_line_address + 1);
 		let pixels = Self::get_tile_row(lb, hb);
 		pixels.iter().for_each(|p| {
 			self
@@ -314,7 +316,7 @@ impl PPU {
 
 		if self.lx == 0 {
 			let remaining = match is_window {
-				true => 1 + self.wx,
+				true => 1 + wx,
 				false => 8 - (scx % 8),
 			} as usize;
 			while self.background_fifo.len() > remaining {
@@ -327,8 +329,8 @@ impl PPU {
 	fn render(&mut self, mmu: &MMU) {
 		if !self.w_present
 			&& is_bit_set(mmu.read_byte(Self::LCDC), 5)
-			&& self.ly >= self.wy
-			&& self.lx + 7 >= self.wx
+			&& self.ly >= mmu.read_byte(Self::WY)
+			&& self.lx + 7 >= mmu.read_byte(Self::WX)
 		{
 			self.background_fifo.clear();
 			self.w_present = true;
@@ -397,8 +399,6 @@ impl PPU {
 		self.w_ly += if self.w_present { 1 } else { 0 };
 		self.w_lx = 0;
 		self.w_present = false;
-		self.wy = mmu.read_byte(Self::WY);
-		self.wx = mmu.read_byte(Self::WX);
 		let lyc = mmu.read_byte(Self::LYC);
 		self.ly = (self.ly + 1) % 0x9A;
 		self.lx = 0;

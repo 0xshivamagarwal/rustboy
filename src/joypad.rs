@@ -13,6 +13,22 @@ pub enum Button {
 	UNKNOWN,
 }
 
+impl Button {
+	pub fn values() -> [Button; 9] {
+		[
+			Button::A,
+			Button::B,
+			Button::SELECT,
+			Button::START,
+			Button::RIGHT,
+			Button::LEFT,
+			Button::UP,
+			Button::DOWN,
+			Button::UNKNOWN,
+		]
+	}
+}
+
 pub struct Joypad(u8);
 
 impl Joypad {

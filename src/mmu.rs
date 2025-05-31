@@ -3,6 +3,62 @@ use crate::{
 	utils::is_bit_set,
 };
 
+// fn display(title: &str, vec: &[u8]) {
+// 	print!("{}:", title);
+// 	for (i, x) in vec.iter().enumerate() {
+// 		if i % 8 == 0 {
+// 			println!();
+// 		}
+// 		print!("{:02X}\t", x);
+// 	}
+// 	println!();
+// }
+//
+// fn display_cartridge_info(header: &[u8]) {
+// 	display("entry point", &header[..4]);
+//
+// 	display("logo", &header[4..52]);
+//
+// 	// display("title", &header[52..68]);
+//
+// 	if header[67].is_ascii() || header[67] == 0x80 {
+// 		let title = String::from_utf8(
+// 			header[52..68]
+// 				.iter()
+// 				.take_while(|u| u.is_ascii() && **u != 0)
+// 				.map(|u| *u)
+// 				.collect::<Vec<_>>(),
+// 		)
+// 		.unwrap();
+//
+// 		println!("title: {:?}", title);
+// 	} else {
+// 		panic!("not implemented");
+// 	}
+//
+// 	if header[75] == 0x33 {
+// 		display("new licensee code", &header[68..70]);
+// 	}
+//
+// 	display("SGB flag", &header[70..71]);
+//
+// 	display("cartridge type", &header[71..72]);
+//
+// 	display("rom size", &header[72..73]);
+//
+// 	display("ram size", &header[73..74]);
+//
+// 	display("destination code", &header[74..75]);
+//
+// 	display("old licensee code", &header[75..76]);
+//
+// 	display("mask rom version number", &header[76..77]);
+//
+// 	display("header checksum", &header[77..78]);
+//
+// 	display("global checksum", &header[78..80]);
+// }
+
 pub struct MMU {
 	memory: [u8; 0x10000],
 	div_counter: u16,

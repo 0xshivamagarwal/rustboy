@@ -1,8 +1,6 @@
-use crate::Checks;
 use crate::DEBUG_FLAG;
 use crate::MMU;
-use std::fs::File;
-use std::io::{BufWriter, Write};
+use crate::utils::Checks;
 use std::ops::{Shl, Shr};
 
 pub struct CPU {
@@ -595,7 +593,7 @@ impl CPU {
 		}
 	}
 
-	pub fn execute_next(&mut self, mmu: &mut MMU, buffer: &mut BufWriter<File>) -> u16 {
+	pub fn execute_next(&mut self, mmu: &mut MMU) -> u16 {
 		let cycles = self.execute_interrupts(mmu);
 
 		if cycles > 0 {
@@ -605,23 +603,23 @@ impl CPU {
 		}
 
 		if DEBUG_FLAG {
-			let _ = buffer.write(format!(
-			"A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}\n",
-			self.a,
-			self.f,
-			self.b,
-			self.c,
-			self.d,
-			self.e,
-			self.h,
-			self.l,
-			self.sp,
-			self.pc,
-			mmu.read_byte(self.pc),
-			mmu.read_byte(self.pc + 1),
-			mmu.read_byte(self.pc + 2),
-			mmu.read_byte(self.pc + 3),
-		).as_bytes());
+			println!(
+				"A:{:02X} F:{:02X} B:{:02X} C:{:02X} D:{:02X} E:{:02X} H:{:02X} L:{:02X} SP:{:04X} PC:{:04X} PCMEM:{:02X},{:02X},{:02X},{:02X}\n",
+				self.a,
+				self.f,
+				self.b,
+				self.c,
+				self.d,
+				self.e,
+				self.h,
+				self.l,
+				self.sp,
+				self.pc,
+				mmu.read_byte(self.pc),
+				mmu.read_byte(self.pc + 1),
+				mmu.read_byte(self.pc + 2),
+				mmu.read_byte(self.pc + 3),
+			);
 		}
 
 		let opcode = self.get_byte(mmu);
