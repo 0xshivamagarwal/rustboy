@@ -1,3 +1,4 @@
+mod cartridge;
 mod cpu;
 mod joypad;
 mod mmu;
@@ -56,20 +57,11 @@ fn main() {
 		},
 	)
 	.expect("unable to create window");
-	let mut mmu = MMU::new(&cartridge[..]);
+	let mut mmu = MMU::new(cartridge);
 	let mut cpu = CPU::new();
 	let mut ppu = PPU::new(&mmu);
 	let mut frames = 0;
 	let start = SystemTime::now();
-
-	// TODO:
-	// -- PPU:
-	// 2. check lcdc register bits add functionality if any not used
-	// 3. check stat register bits add functionality if any noy used
-	// 4. enable / disable vram & oam access after mode changes
-	//
-	// -- CPU:
-	// 1. improve timings
 
 	while window.is_open() && !window.is_key_down(Key::Escape) {
 		let cycles = cpu.execute_next(&mut mmu);
@@ -78,9 +70,16 @@ fn main() {
 			ppu.tick(&mut mmu);
 
 			if ppu.is_frame_ready() {
+				window.set_title(
+					format!(
+						"RustBoy - FPS: {}",
+						1_000_000 * frames / start.elapsed().unwrap().as_micros()
+					)
+					.as_str(),
+				);
 				let _ = window.update_with_buffer(ppu.get_frame_buffer(), WIDTH, HEIGHT);
 				frames += 1;
-				thread::sleep(Duration::from_millis(8));
+				thread::sleep(Duration::from_millis(12));
 				Button::values()
 					.iter()
 					.for_each(|button| update_joypad_key(&window, &mut mmu, *button));

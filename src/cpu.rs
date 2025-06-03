@@ -786,6 +786,11 @@ impl CPU {
 				4
 			}
 
+			0x10 => {
+				self.get_byte(mmu);
+				8
+			}
+
 			0x11 => {
 				let x = u16::from_le_bytes([self.get_byte(mmu), self.get_byte(mmu)]);
 				self.set_de(x);

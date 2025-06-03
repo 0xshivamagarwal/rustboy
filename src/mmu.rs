@@ -1,65 +1,11 @@
 use crate::{
+	cartridge::{self, Cartridge},
 	joypad::{Button, Joypad},
 	utils::is_bit_set,
 };
 
-// fn display(title: &str, vec: &[u8]) {
-// 	print!("{}:", title);
-// 	for (i, x) in vec.iter().enumerate() {
-// 		if i % 8 == 0 {
-// 			println!();
-// 		}
-// 		print!("{:02X}\t", x);
-// 	}
-// 	println!();
-// }
-//
-// fn display_cartridge_info(header: &[u8]) {
-// 	display("entry point", &header[..4]);
-//
-// 	display("logo", &header[4..52]);
-//
-// 	// display("title", &header[52..68]);
-//
-// 	if header[67].is_ascii() || header[67] == 0x80 {
-// 		let title = String::from_utf8(
-// 			header[52..68]
-// 				.iter()
-// 				.take_while(|u| u.is_ascii() && **u != 0)
-// 				.map(|u| *u)
-// 				.collect::<Vec<_>>(),
-// 		)
-// 		.unwrap();
-//
-// 		println!("title: {:?}", title);
-// 	} else {
-// 		panic!("not implemented");
-// 	}
-//
-// 	if header[75] == 0x33 {
-// 		display("new licensee code", &header[68..70]);
-// 	}
-//
-// 	display("SGB flag", &header[70..71]);
-//
-// 	display("cartridge type", &header[71..72]);
-//
-// 	display("rom size", &header[72..73]);
-//
-// 	display("ram size", &header[73..74]);
-//
-// 	display("destination code", &header[74..75]);
-//
-// 	display("old licensee code", &header[75..76]);
-//
-// 	display("mask rom version number", &header[76..77]);
-//
-// 	display("header checksum", &header[77..78]);
-//
-// 	display("global checksum", &header[78..80]);
-// }
-
 pub struct MMU {
+	cartridge: Box<dyn Cartridge>,
 	memory: [u8; 0x10000],
 	div_counter: u16,
 	prev_and_result: bool,
@@ -68,9 +14,8 @@ pub struct MMU {
 }
 
 impl MMU {
-	pub fn new(cartridge: &[u8]) -> Self {
+	pub fn new(cartridge: Vec<u8>) -> Self {
 		let mut memory = [0_u8; 0x10000];
-		memory[0x0000..0x8000].copy_from_slice(&cartridge[0x0000..0x8000]);
 		memory[0xFF00] = 0xCF;
 		memory[0xFF02] = 0x7E;
 		memory[0xFF04] = 0xAB;
@@ -100,6 +45,7 @@ impl MMU {
 		memory[0xFF47] = 0xFC;
 
 		MMU {
+			cartridge: cartridge::create(cartridge),
 			memory: memory,
 			div_counter: 0xABCC,
 			prev_and_result: false,
@@ -110,7 +56,7 @@ impl MMU {
 
 	pub fn read_byte(&self, address: u16) -> u8 {
 		match address {
-			0xA000..0xC000 => 0x00, // reads not allowed on external ram
+			0x0000..0x8000 | 0xA000..0xC000 => self.cartridge.read_byte(address),
 			0xE000..0xFE00 => self.memory[address as usize - 0x2000],
 			0xFEA0..0xFF00 => 0x00, // reads not allowed on unusable region
 			0xFF00 => self.joypad.read(self.memory[0xFF00]),
@@ -125,8 +71,7 @@ impl MMU {
 		}
 
 		match address {
-			0x0000..0x8000 => {} // writes not allowed on rom
-			0xA000..0xC000 => {} // writes not allowed on external ram
+			0x0000..0x8000 | 0xA000..0xC000 => self.cartridge.write_byte(address, value),
 			0xE000..0xFE00 => self.memory[address as usize - 0x2000] = value,
 			0xFEA0..0xFF00 => {} // writes not allowed on unusable region
 			0xFF00 => {
